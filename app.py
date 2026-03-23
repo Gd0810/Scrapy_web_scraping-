@@ -1,22 +1,36 @@
+﻿import asyncio
+import sys
 import streamlit as st
+
+# Playwright needs the selector event loop on Windows to launch subprocesses.
+if sys.platform.startswith("win"):
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 from run_spider import run_spider
 
-st.set_page_config(page_title="Dynamic Web Scraper", layout="wide")
+st.title("Web Scraper (Static + Dynamic)")
 
-st.title("🕷️ Dynamic Web Scraper (Scrapy + Playwright)")
-
-url = st.text_input("Enter Website URL")
+url = st.text_input("Enter URL")
+mode = st.selectbox("Mode", ["auto", "static", "dynamic"], index=0)
 
 if st.button("Scrape"):
     if url:
-        with st.spinner("Scraping dynamic content..."):
-            data = run_spider(url)
+        with st.spinner("Scraping content..."):
+            try:
+                data = run_spider(url, mode=mode)
+            except Exception as e:
+                st.error(f"Error: {e}")
+                st.stop()
 
-        st.success("Scraping Completed!")
+        if data:
+            st.success("Data fetched")
 
-        for item in data:
-            st.subheader(item["title"])
-            st.write(item["url"])
-            st.code(item["content"])
-    else:
-        st.warning("Please enter a valid URL")
+            for item in data:
+                st.subheader(item.get("title") or "(no title)")
+                st.write(item.get("url"))
+                st.write(f"Mode: {item.get('mode', 'unknown')}")
+
+                with st.expander("HTML Content"):
+                    st.code(item.get("content") or "")
+        else:
+            st.warning("No data found")

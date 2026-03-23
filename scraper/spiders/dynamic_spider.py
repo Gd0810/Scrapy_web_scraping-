@@ -1,37 +1,53 @@
 import scrapy
 
+
 class DynamicSpider(scrapy.Spider):
     name = "dynamic"
 
-    def __init__(self, url=None, *args, **kwargs):
+    custom_settings = {
+        "DOWNLOAD_HANDLERS": {
+            "http": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
+            "https": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
+        },
+        "PLAYWRIGHT_BROWSER_TYPE": "chromium",
+    }
+
+    def __init__(self, url=None, results=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.start_urls = [url]
+        self.results = results
 
-    def start_requests(self):
+    async def start(self):
         for url in self.start_urls:
             yield scrapy.Request(
                 url,
                 meta={
                     "playwright": True,
                     "playwright_include_page": True,
-                }
+                },
             )
 
     async def parse(self, response):
         page = response.meta["playwright_page"]
 
-        # Wait for dynamic content
-        await page.wait_for_timeout(3000)
+        try:
+            await page.wait_for_load_state("networkidle", timeout=10000)
+        except Exception:
+            await page.wait_for_timeout(3000)
 
         title = await page.title()
+        html = await page.content()
 
-        # Example: grab all text
-        content = await page.content()
-
-        yield {
-            "url": response.url,
+        item = {
             "title": title,
-            "content": content[:500]  # preview
+            "url": response.url,
+            "content": html[:2000],
+            "mode": "dynamic",
         }
 
+        if self.results is not None:
+            self.results.append(item)
+
         await page.close()
+
+        yield item
